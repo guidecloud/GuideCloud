@@ -3,7 +3,7 @@ cat << 'EOF' > vm_manager.sh
 set -euo pipefail
 
 # ========================================================
-# GUIDECLOUD PRO VM MANAGER (RYZEN 9 - 100% ENGLISH)
+# GUIDECLOUD PRO VM MANAGER (RYZEN 9 - AUTO FIX VERSION)
 # ========================================================
 
 VM_DIR="$HOME/vms"
@@ -16,7 +16,6 @@ display_header() {
     echo "=========================================================="
 }
 
-# 1. Function to list all VMs
 list_vms() {
     local vms=($(find "$VM_DIR" -name "*.conf" -exec basename {} .conf \; 2>/dev/null))
     echo "Total VMs found: ${#vms[@]}"
@@ -32,7 +31,6 @@ list_vms() {
     return 0
 }
 
-# Select VM by Number
 get_vm_by_index() {
     local vms=($(find "$VM_DIR" -name "*.conf" -exec basename {} .conf \; 2>/dev/null))
     read -p "Enter VM number from the list: " idx
@@ -46,17 +44,18 @@ get_vm_by_index() {
     fi
 }
 
-# 2. Function to Create New VM
 create_new_vm() {
     display_header
     echo "[CREATE NEW VM]"
-    read -p "1. VM File Name: " VM_NAME
-    read -p "2. Hostname: " HOSTNAME
-    read -p "3. Username: " USERNAME
+    read -p "1. VM File Name (e.g. vps1): " VM_NAME
+    read -p "2. Hostname (e.g. guidecloud): " HOSTNAME
+    read -p "3. Username (e.g. admin): " USERNAME
     read -p "4. Password: " PASSWORD
     read -p "5. RAM (MB) [e.g. 2048]: " MEMORY
     read -p "6. CPU Cores [e.g. 2]: " CPUS
-    read -p "7. Disk Size [e.g. 20G]: " DISK_SIZE
+    read -p "7. Disk Size (IMPORTANT: include G, e.g. 20G): " DISK_SIZE
+    
+    # Auto port selection logic
     read -p "8. SSH Port [e.g. 3000]: " SSH_PORT
 
     IMG_FILE="$VM_DIR/$VM_NAME.img"
@@ -66,9 +65,14 @@ create_new_vm() {
         echo "Downloading OS Image... Please wait."
         wget -q --show-progress https://cloud-images.ubuntu.com/jammy/current/jammy-server-cloudimg-amd64.img -O "$IMG_FILE"
     fi
+
+    echo "Configuring Disk Size..."
+    # Fixing the 'size' parameter error
+    if [[ ! "$DISK_SIZE" =~ [GgMm]$ ]]; then
+        DISK_SIZE="${DISK_SIZE}G"
+    fi
     qemu-img resize "$IMG_FILE" "$DISK_SIZE"
 
-    # Cloud-init config
     cat > user-data <<EOC
 #cloud-config
 hostname: $HOSTNAME
@@ -89,7 +93,6 @@ EOC
     cloud-localds "$SEED_FILE" user-data meta-data
     rm user-data meta-data
 
-    # Save Configuration File
     cat > "$VM_DIR/$VM_NAME.conf" <<EOC
 VM_NAME="$VM_NAME"
 HOSTNAME="$HOSTNAME"
@@ -106,31 +109,19 @@ EOC
     sleep 2
 }
 
-# 3. Show VM Details
-show_info() {
-    display_header
-    if list_vms; then
-        if get_vm_by_index; then
-            echo "--- Details for $VM_NAME ---"
-            echo "Hostname : $HOSTNAME"
-            echo "User     : $USERNAME"
-            echo "Password : $PASSWORD"
-            echo "RAM/CPU  : $MEMORY MB / $CPUS Cores"
-            echo "SSH Port : $SSH_PORT"
-            echo "SSH Cmd  : ssh $USERNAME@localhost -p $SSH_PORT"
-            echo "--------------------------------"
-            read -p "Press Enter to return to menu..."
-        fi
-    fi
-}
-
-# 4. Start VM (Ryzen 9 Mode)
 start_vm() {
     display_header
     if list_vms; then
         if get_vm_by_index; then
+            # Checking if the port is busy before starting
+            if ss -tln | grep -q ":$SSH_PORT "; then
+                echo "ERROR: Port $SSH_PORT is already in use by another process."
+                echo "Please use Option 4 (Edit) to change the SSH Port."
+                read -p "Press Enter to continue..."
+                return
+            fi
+
             echo "Starting $VM_NAME as Ryzen 9 5950X..."
-            echo "Note: Wait 1-2 minutes for boot. If blank, press Enter."
             qemu-system-x86_64 \
                 -enable-kvm \
                 -m "$MEMORY" \
@@ -145,7 +136,6 @@ start_vm() {
     fi
 }
 
-# 5. Edit VM
 edit_vm() {
     display_header
     if list_vms; then
@@ -161,7 +151,6 @@ edit_vm() {
             CPUS=${n_cpu:-$CPUS}
             SSH_PORT=${n_port:-$SSH_PORT}
             
-            # Save updated config
             cat > "$VM_DIR/$VM_NAME.conf" <<EOC
 VM_NAME="$VM_NAME"
 HOSTNAME="$HOSTNAME"
@@ -180,7 +169,6 @@ EOC
     fi
 }
 
-# Main Menu
 while true; do
     display_header
     echo "1) Create New VM"
@@ -193,7 +181,7 @@ while true; do
     read -p "Select Option: " opt
     case $opt in
         1) create_new_vm ;;
-        2) show_info ;;
+        2) display_header; list_vms; read -p "Press Enter to return..." ;;
         3) start_vm ;;
         4) edit_vm ;;
         5) display_header; if list_vms; then if get_vm_by_index; then rm -f "$IMG_FILE" "$SEED_FILE" "$VM_DIR/$SELECTED_VM.conf"; echo "VM Deleted!"; sleep 2; fi; fi ;;
