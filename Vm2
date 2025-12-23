@@ -2,59 +2,74 @@
 set -euo pipefail
 
 # ========================================================
-# RYZEN 9 VM MANAGER - STABLE (NO GHz INPUT)
+# GUIDECLOUD PRO VM MANAGER (RYZEN 9 VERSION)
 # ========================================================
 
 VM_DIR="$HOME/vms"
 mkdir -p "$VM_DIR"
 
-# OS Selection
-declare -A OS_OPTIONS=(
-    ["1"]="Ubuntu 22.04|https://cloud-images.ubuntu.com/jammy/current/jammy-server-cloudimg-amd64.img"
-    ["2"]="Ubuntu 24.04|https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img"
-    ["3"]="Debian 12|https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-generic-amd64.qcow2"
-    ["4"]="Fedora 40|https://download.fedoraproject.org/pub/fedora/linux/releases/40/Cloud/x86_64/images/Fedora-Cloud-Base-40-1.14.x86_64.qcow2"
-)
-
 display_header() {
     clear
     echo "=========================================================="
-    echo "    RYZEN 9 VM MANAGER - STABLE MODE"
+    echo "    RYZEN 9 VM MANAGER - ADVANCED CONTROL (ENG)"
     echo "=========================================================="
+}
+
+list_vms() {
+    local vms=($(find "$VM_DIR" -name "*.conf" -exec basename {} .conf \; 2>/dev/null))
+    echo "Total VMs found: ${#vms[@]}"
+    if [ ${#vms[@]} -eq 0 ]; then
+        echo "No VMs found!"
+        return 1
+    fi
+    echo "--------------------------------"
+    for i in "${!vms[@]}"; do
+        echo "$((i+1))) ${vms[$i]}"
+    done
+    echo "--------------------------------"
+    return 0
+}
+
+get_vm_by_index() {
+    local vms=($(find "$VM_DIR" -name "*.conf" -exec basename {} .conf \; 2>/dev/null))
+    read -p "Enter VM number from the list: " idx
+    if [[ "$idx" =~ ^[0-9]+$ ]] && [ "$idx" -le "${#vms[@]}" ] && [ "$idx" -gt 0 ]; then
+        SELECTED_VM="${vms[$((idx-1))]}"
+        source "$VM_DIR/$SELECTED_VM.conf"
+        return 0
+    else
+        echo "Error: Invalid selection!"
+        return 1
+    fi
 }
 
 create_new_vm() {
     display_header
-    echo "[1] Select OS:"
-    for key in $(echo "${!OS_OPTIONS[@]}" | tr ' ' '\n' | sort); do
-        echo "$key) ${OS_OPTIONS[$key]%%|*}"
-    done
-    read -p "Choice: " os_choice
-    IMG_URL=${OS_OPTIONS[$os_choice]#*|}
-
-    echo -e "\n[2] Config:"
-    read -p "VM Name: " VM_NAME
-    read -p "Hostname: " HOSTNAME
-    read -p "Username: " USERNAME
-    read -p "Password: " PASSWORD
-    read -p "RAM (MB): " MEMORY
-    read -p "CPUs: " CPUS
+    echo "[CREATE NEW VM]"
+    read -p "1. VM File Name (e.g. vps1): " VM_NAME
+    read -p "2. Hostname (e.g. guidecloud): " HOSTNAME
+    read -p "3. Username (e.g. admin): " USERNAME
+    read -p "4. Password: " PASSWORD
+    read -p "5. RAM (MB) [e.g. 2048]: " MEMORY
+    read -p "6. CPU Cores [e.g. 2]: " CPUS
     
-    # Disk Size Fix
-    read -p "Disk Size (e.g. 20G): " DISK_SIZE
-    if [[ ! "$DISK_SIZE" =~ [GgMm]$ ]]; then DISK_SIZE="${DISK_SIZE}G"; fi
+    # à¦†à¦ªà¦¨à¦¾à¦° à¦°à¦¿à¦•à§‹à§Ÿà§‡à¦¸à§à¦Ÿ à¦…à¦¨à§à¦¯à¦¾à§Ÿà§€ GHz à¦‡à¦¨à¦ªà§à¦Ÿ à¦…à¦ªà¦¶à¦¨
+    read -p "7. CPU Clock Speed (GHz) [e.g. 3.8]: " CPU_GHZ
     
-    read -p "SSH Port: " SSH_PORT
+    read -p "8. Disk Size (e.g. 20G): " DISK_SIZE
+    read -p "9. SSH Port [e.g. 3000]: " SSH_PORT
 
     IMG_FILE="$VM_DIR/$VM_NAME.img"
     SEED_FILE="$VM_DIR/$VM_NAME-seed.iso"
 
     if [[ ! -f "$IMG_FILE" ]]; then
-        wget -q --show-progress "$IMG_URL" -O "$IMG_FILE"
+        echo "Downloading OS Image..."
+        wget -q --show-progress https://cloud-images.ubuntu.com/jammy/current/jammy-server-cloudimg-amd64.img -O "$IMG_FILE"
     fi
+
+    echo "Configuring Disk..."
     qemu-img resize "$IMG_FILE" "$DISK_SIZE"
 
-    # Cloud-init (Password Setup)
     cat > user-data <<EOC
 #cloud-config
 hostname: $HOSTNAME
@@ -63,52 +78,268 @@ users:
   - name: $USERNAME
     sudo: ALL=(ALL) NOPASSWD:ALL
     shell: /bin/bash
+    lock_passwd: false
     passwd: $(openssl passwd -6 "$PASSWORD")
+chpasswd:
+  list: |
+    root:$PASSWORD
+    $USERNAME:$PASSWORD
+  expire: false
 EOC
-    cloud-localds "$SEED_FILE" user-data
-    rm user-data
+    echo "instance-id: iid-$VM_NAME" > meta-data
+    cloud-localds "$SEED_FILE" user-data meta-data
+    rm user-data meta-data
 
-    # Save Config - GHz বাদ দেওয়া হয়েছে স্থিতিশীলতার জন্য
+    # GHz à¦¤à¦¥à§à¦¯ à¦•à¦¨à¦«à¦¿à¦— à¦«à¦¾à¦‡à¦²à§‡ à¦¸à§‡à¦­ à¦•à¦°à¦¾ à¦¹à¦šà§à¦›à§‡
     cat > "$VM_DIR/$VM_NAME.conf" <<EOC
 VM_NAME="$VM_NAME"
 HOSTNAME="$HOSTNAME"
-USERNAME="$USERNAME"
-PASSWORD="$PASSWORD"
 MEMORY="$MEMORY"
 CPUS="$CPUS"
+CPU_GHZ="$CPU_GHZ"
 DISK_SIZE="$DISK_SIZE"
 SSH_PORT="$SSH_PORT"
+USERNAME="$USERNAME"
+PASSWORD="$PASSWORD"
 IMG_FILE="$IMG_FILE"
 SEED_FILE="$SEED_FILE"
 EOC
     echo "Success: VM Created!"
+    sleep 2
 }
 
 start_vm() {
     display_header
-    local vms=($(find "$VM_DIR" -name "*.conf" -exec basename {} .conf \; 2>/dev/null))
-    if [ ${#vms[@]} -eq 0 ]; then echo "No VMs!"; return; fi
-    
-    for i in "${!vms[@]}"; do echo "$((i+1))) ${vms[$i]}"; done
-    read -p "Select VM Number: " idx
-    source "$VM_DIR/${vms[$((idx-1))]}.conf"
-
-    echo "Starting $VM_NAME as Ryzen 9 5950X..."
-    # এখানে GHz পরিবর্তন ছাড়াই Ryzen 9 ব্র্যান্ডিং করা হয়েছে
-    qemu-system-x86_64 \
-        -enable-kvm \
-        -m "$MEMORY" \
-        -smp "$CPUS" \
-        -cpu host,vendor=AuthenticAMD,model_id="AMD Ryzen 9 5950X 16-Core Processor" \
-        -drive "file=$IMG_FILE,format=qcow2,if=virtio" \
-        -drive "file=$SEED_FILE,format=raw,if=virtio" \
-        -netdev user,id=n1,hostfwd=tcp::$SSH_PORT-:22 \
-        -device virtio-net-pci,netdev=n1 \
-        -nographic -serial mon:stdio
+    if list_vms; then
+        if get_vm_by_index; then
+            echo "Starting $VM_NAME with Ryzen 9 @ $CPU_GHZ GHz..."
+            qemu-system-x86_64 \
+                -enable-kvm \
+                -m "$MEMORY" \
+                -smp "$CPUS" \
+                -cpu EPYC,vendor=AuthenticAMD,model_id="AMD Ryzen 9 5950X 16-Core Processor @ ${CPU_GHZ}GHz" \
+                -drive "file=$IMG_FILE,format=qcow2,if=virtio" \
+                -drive "file=$SEED_FILE,format=raw,if=virtio" \
+                -netdev user,id=n1,hostfwd=tcp::$SSH_PORT-:22 \
+                -device virtio-net-pci,netdev=n1 \
+                -nographic -serial mon:stdio
+        fi
+    fi
 }
-# (বাকি এডিট এবং মেনু ফাংশনগুলো আগের মতোই থাকবে)
+
+edit_vm() {
     display_header
     if list_vms; then
+        if get_vm_by_index; then
+            read -p "New Hostname [$HOSTNAME]: " n_host
+            read -p "New RAM [$MEMORY]: " n_mem
+            read -p "New CPU [$CPUS]: " n_cpu
+            read -p "New GHz [$CPU_GHZ]: " n_ghz
+            read -p "New SSH Port [$SSH_PORT]: " n_port
+            
+            HOSTNAME=${n_host:-$HOSTNAME}
+            MEMORY=${n_mem:-$MEMORY}
+            CPUS=${n_cpu:-$CPUS}
+            CPU_GHZ=${n_ghz:-$CPU_GHZ}
+            SSH_PORT=${n_port:-$SSH_PORT}
+            
+            cat > "$VM_DIR/$VM_NAME.conf" <<EOC
+VM_NAME="$VM_NAME"
+HOSTNAME="$HOSTNAME"
+MEMORY="$MEMORY"
+CPUS="$CPUS"
+CPU_GHZ="$CPU_GHZ"
+DISK_SIZE="$DISK_SIZE"
+SSH_PORT="$SSH_PORT"
+USERNAME="$USERNAME"
+PASSWORD="$PASSWORD"
+IMG_FILE="$IMG_FILE"
+SEED_FILE="$SEED_FILE"
+EOC
+            echo "Updated!"
+            sleep 2
+        fi
+    fi
+}
+
+while true; do
+    display_header
+    echo "1) Create New VM"
+    echo "2) Show VM List"
+    echo "3) Start VM"
+    echo "4) Edit VM"
+    echo "5) Delete VM"
+    echo "6) Exit"
+    read -p "Select: " opt
+    case $opt in
+        1) create_new_vm ;;
+        2) list_vms; read -p "Press Enter..." ;;
+        3) start_vm ;;
+        4) edit_vm ;;
+        5) if list_vms; then if get_vm_by_index; then rm -f "$IMG_FILE" "$SEED_FILE" "$VM_DIR/$SELECTED_VM.conf"; echo "Deleted!"; sleep 2; fi; fi ;;
+        6) exit 0 ;;
+    esac
+done
+start_vm() {
+    display_header
+    if list_vms; then
+        if get_vm_by_index; then
+            # Checking if the port is busy before starting
+            if ss -tln | grep -q ":$SSH_PORT "; then
+                echo "ERROR: Port $SSH_PORT is already in use by another process."
+                echo "Please use Option 4 (Edit) to change the SSH Port."
+                read -p "Press Enter to continue..."
+                return
+            fi
+
+            echo "Starting $VM_NAME as Ryzen 9 5950X..."
+            qemu-system-x86_64 \
+                -enable-kvm \
+                -m "$MEMORY" \
+                -smp "$CPUS" \
+                -cpu EPYC,vendor=AuthenticAMD,model-id="AMD Ryzen 9 5950X 16-Core Processor" \
+                -drive "file=$IMG_FILE,format=qcow2,if=virtio" \
+                -drive "file=$SEED_FILE,format=raw,if=virtio" \
+                -netdev user,id=n1,hostfwd=tcp::$SSH_PORT-:22 \
+                -device virtio-net-pci,netdev=n1 \
+                -nographic -serial mon:stdio
+        fi
+    fi
+}
+
+edit_vm() {
+    display_header
+    if list_vms; then
+        if get_vm_by_index; then
+            echo "Editing $VM_NAME (Leave blank to keep current value)"
+            read -p "New Hostname [$HOSTNAME]: " n_host
+            read -p "New RAM [$MEMORY]: " n_mem
+            read -p "New CPU [$CPUS]: " n_cpu
+            read -p "New SSH Port [$SSH_PORT]: " n_port
+            
+            HOSTNAME=${n_host:-$HOSTNAME}
+            MEMORY=${n_mem:-$MEMORY}
+            CPUS=${n_cpu:-$CPUS}
+            SSH_PORT=${n_port:-$SSH_PORT}
+            
+            cat > "$VM_DIR/$VM_NAME.conf" <<EOC
+VM_NAME="$VM_NAME"
+HOSTNAME="$HOSTNAME"
+MEMORY="$MEMORY"
+CPUS="$CPUS"
+DISK_SIZE="$DISK_SIZE"
+SSH_PORT="$SSH_PORT"
+USERNAME="$USERNAME"
+PASSWORD="$PASSWORD"
+IMG_FILE="$IMG_FILE"
+SEED_FILE="$SEED_FILE"
+EOC
+            echo "Update Successful!"
+            sleep 2
+        fi
+    fi
+}
+
+while true; do
+    display_header
+    echo "1) Create New VM"
+    echo "2) Show VM List & Info"
+    echo "3) Start VM (Ryzen 9 Mode)"
+    echo "4) Edit VM Configuration"
+    echo "5) Delete VM"
+    echo "6) Exit"
+    echo "--------------------------------"
+    read -p "Select Option: " opt
+    case $opt in
+        1) create_new_vm ;;
+        2) display_header; list_vms; read -p "Press Enter to return..." ;;
+        3) start_vm ;;
+        4) edit_vm ;;
+        5) display_header; if list_vms; then if get_vm_by_index; then rm -f "$IMG_FILE" "$SEED_FILE" "$VM_DIR/$SELECTED_VM.conf"; echo "VM Deleted!"; sleep 2; fi; fi ;;
+        6) exit 0 ;;
+    esac
+done
+EOF
+
+chmod +x vm_manager.sh
+./vm_manager.sh
+
+    # Default Setup
+    USERNAME="root"
+    PASSWORD="root"
+    HOSTNAME="$VM_NAME"
+    OS_TYPE="Ubuntu"
+    IMG_URL="https://cloud-images.ubuntu.com/jammy/current/jammy-server-cloudimg-amd64.img"
+    IMG_FILE="$VM_DIR/$VM_NAME.img"
+    SEED_FILE="$VM_DIR/$VM_NAME-seed.iso"
+    GUI_MODE=false
+
+    # Image Handling
+    if [[ ! -f "$IMG_FILE" ]]; then
+        print_status "INFO" "Downloading Image..."
+        wget -O "$IMG_FILE" "$IMG_URL"
+        qemu-img resize "$IMG_FILE" "$DISK_SIZE"
+    fi
+
+    # Cloud-init
+    cat > user-data <<EOF
+#cloud-config
+password: $PASSWORD
+chpasswd: { expire: False }
+ssh_pwauth: True
+EOF
+    cloud-localds "$SEED_FILE" user-data
+    save_vm_config
+}
+
+# Start VM (With Auto KVM/TCG & Ryzen 9 Branding)
+start_vm() {
+    local vm_name=$1
+    if load_vm_config "$vm_name"; then
+        local ACCEL="tcg"
+        local CPU_MODEL="max"
+        
+        if [ -e /dev/kvm ]; then
+            ACCEL="kvm"
+            CPU_MODEL="host"
+            print_status "SUCCESS" "KVM Acceleration Enabled"
+        else
+            print_status "WARN" "KVM not found. Using TCG Emulation"
+        fi
+
+        print_status "INFO" "Starting Ryzen 9 5950X VM @ ${CPU_GHZ} GHz..."
+        
+        qemu-system-x86_64 \
+            -accel "$ACCEL" \
+            -m "$MEMORY" \
+            -smp "$CPUS" \
+            -cpu "$CPU_MODEL",vendor=AuthenticAMD,model_id="AMD Ryzen 9 5950X 16-Core Processor @ ${CPU_GHZ}GHz" \
+            -drive "file=$IMG_FILE,format=qcow2" \
+            -drive "file=$SEED_FILE,format=raw" \
+            -nographic \
+            -netdev "user,id=n0,hostfwd=tcp::$SSH_PORT-:22" \
+            -device virtio-net-pci,netdev=n0
+    fi
+}
+
+# Main Logic (Keeping your original menu structure)
+check_dependencies
+VM_DIR="$HOME/vms"
+mkdir -p "$VM_DIR"
+
+while true; do
+    display_header
+    echo "1) Create a new VM"
+    echo "2) Start a VM"
+    echo "0) Exit"
+    read -p "Choice: " choice
+    case $choice in
+        1) create_new_vm ;;
+        2) read -p "Enter VM Name: " n; start_vm "$n" ;;
+        0) exit 0 ;;
+    esac
+    read -p "Press Enter to continue..."
+done
         if get_vm_by_index; then
             echo "Starting $VM_NAME with Ryzen 9 @ $CPU_GHZ GHz..."
             qemu-system-x86_64 \
