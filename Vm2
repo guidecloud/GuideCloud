@@ -1,66 +1,62 @@
 #!/bin/bash
 set -euo pipefail
 
-# =============================
-# Enhanced Multi-VM Manager (Ryzen 9 + Full Control)
-# =============================
+# ========================================================
+# GUIDECLOUD ULTIMATE VM MANAGER (RYZEN 9 ENABLED)
+# ========================================================
 
 VM_DIR="$HOME/vms"
 mkdir -p "$VM_DIR"
 
 display_header() {
     clear
-    echo "========================================================================"
-    echo "  GUIDECLOUD VM MANAGER - RYZEN 9 ENABLED (FULL CONTROL)"
-    echo "========================================================================"
+    echo "=========================================================="
+    echo "    RYZEN 9 VM MANAGER - FULL CONTROL & INFO"
+    echo "=========================================================="
 }
 
-print_status() {
-    local type=$1
-    local message=$2
-    case $type in
-        "INFO") echo -e "\033[1;34m[INFO]\033[0m $message" ;;
-        "SUCCESS") echo -e "\033[1;32m[SUCCESS]\033[0m $message" ;;
-        "ERROR") echo -e "\033[1;31m[ERROR]\033[0m $message" ;;
-    esac
+# VM তালিকা দেখানোর ফাংশন
+list_vms() {
+    local vms=($(find "$VM_DIR" -name "*.conf" -exec basename {} .conf \;))
+    if [ ${#vms[@]} -eq 0 ]; then
+        echo "কোনো VM পাওয়া যায়নি!"
+        return 1
+    fi
+    echo "বর্তমানে থাকা VM-এর তালিকা:"
+    for i in "${!vms[@]}"; do
+        echo "$((i+1))) ${vms[$i]}"
+    done
+    return 0
 }
 
-load_vm_config() {
-    local vm_name=$1
-    local config_file="$VM_DIR/$vm_name.conf"
-    if [[ -f "$config_file" ]]; then source "$config_file"; return 0; fi
-    return 1
+# নির্দিষ্ট VM লোড করার ফাংশন
+get_vm_by_index() {
+    local vms=($(find "$VM_DIR" -name "*.conf" -exec basename {} .conf \;))
+    read -p "VM নাম্বারটি দিন: " idx
+    if [[ "$idx" =~ ^[0-9]+$ ]] && [ "$idx" -le "${#vms[@]}" ] && [ "$idx" -gt 0 ]; then
+        SELECTED_VM="${vms[$((idx-1))]}"
+        source "$VM_DIR/$SELECTED_VM.conf"
+        return 0
+    else
+        echo "ভুল নাম্বার!"
+        return 1
+    fi
 }
 
-save_vm_config() {
-    cat > "$VM_DIR/$VM_NAME.conf" <<EOF
-VM_NAME="$VM_NAME"
-MEMORY="$MEMORY"
-CPUS="$CPUS"
-DISK_SIZE="$DISK_SIZE"
-SSH_PORT="$SSH_PORT"
-USERNAME="$USERNAME"
-PASSWORD="$PASSWORD"
-IMG_FILE="$VM_DIR/$VM_NAME.img"
-SEED_FILE="$VM_DIR/$VM_NAME-seed.iso"
-EOF
-}
-
-# --- Create New VM with Full Choice ---
 create_new_vm() {
     display_header
-    read -p "Enter VM Name: " VM_NAME
-    read -p "Enter Username: " USERNAME
-    read -p "Enter Password: " PASSWORD
-    read -p "Enter RAM (MB) [Example: 2048]: " MEMORY
-    read -p "Enter CPU Cores [Example: 2]: " CPUS
-    read -p "Enter Disk Size [Example: 20G]: " DISK_SIZE
-    read -p "Enter SSH Port [Example: 3333]: " SSH_PORT
+    read -p "VM এর নাম দিন: " VM_NAME
+    read -p "ইউজার নেম দিন: " USERNAME
+    read -p "পাসওয়ার্ড দিন: " PASSWORD
+    read -p "র‍্যাম (MB): " MEMORY
+    read -p "সিপিইউ কোর: " CPUS
+    read -p "স্টোরেজ (যেমন 20G): " DISK_SIZE
+    read -p "SSH পোর্ট (যেমন 3000): " SSH_PORT
 
     IMG_FILE="$VM_DIR/$VM_NAME.img"
     SEED_FILE="$VM_DIR/$VM_NAME-seed.iso"
 
-    print_status "INFO" "Preparing VM..."
+    echo "ইমেজ তৈরি হচ্ছে..."
     if [[ ! -f "$IMG_FILE" ]]; then
         wget -q --show-progress https://cloud-images.ubuntu.com/jammy/current/jammy-server-cloudimg-amd64.img -O "$IMG_FILE"
     fi
@@ -79,81 +75,82 @@ EOF
     cloud-localds "$SEED_FILE" user-data meta-data
     rm user-data meta-data
 
-    save_vm_config
-    print_status "SUCCESS" "VM '$VM_NAME' Created Successfully!"
+    # কনফিগ সেভ
+    cat > "$VM_DIR/$VM_NAME.conf" <<EOF
+VM_NAME="$VM_NAME"
+MEMORY="$MEMORY"
+CPUS="$CPUS"
+DISK_SIZE="$DISK_SIZE"
+SSH_PORT="$SSH_PORT"
+USERNAME="$USERNAME"
+PASSWORD="$PASSWORD"
+IMG_FILE="$IMG_FILE"
+SEED_FILE="$SEED_FILE"
+EOF
+    echo "VM তৈরি সফল হয়েছে!"
     sleep 2
 }
 
-# --- Start VM (Ryzen 9) ---
-start_vm() {
-    local name=$1
-    if load_vm_config "$name"; then
-        # Check if port is busy
-        if ss -tln | grep -q ":$SSH_PORT "; then
-            print_status "ERROR" "Port $SSH_PORT is busy! Use 'Edit' to change port."
-            sleep 3
-            return
+show_info() {
+    display_header
+    if list_vms; then
+        if get_vm_by_index; then
+            echo "--------------------------------"
+            echo "VM নাম: $VM_NAME"
+            echo "ইউজার: $USERNAME"
+            echo "পাসওয়ার্ড: $PASSWORD"
+            echo "র‍্যাম: $MEMORY MB | সিপিইউ: $CPUS Core"
+            echo "SSH পোর্ট: $SSH_PORT"
+            echo "ডাউনলোড লিঙ্ক: ssh $USERNAME@localhost -p $SSH_PORT"
+            echo "--------------------------------"
+            read -p "ফিরে যেতে এন্টার চাপুন..."
         fi
-
-        print_status "SUCCESS" "Starting $name as AMD Ryzen 9 5950X..."
-        qemu-system-x86_64 \
-            -enable-kvm \
-            -m "$MEMORY" \
-            -smp "$CPUS",sockets=1,cores="$CPUS",threads=1 \
-            -cpu EPYC,vendor=AuthenticAMD,model-id="AMD Ryzen 9 5950X 16-Core Processor",+topoext,+invtsc \
-            -drive "file=$IMG_FILE,format=qcow2,if=virtio" \
-            -drive "file=$SEED_FILE,format=raw,if=virtio" \
-            -netdev user,id=n1,hostfwd=tcp::$SSH_PORT-:22 \
-            -device virtio-net-pci,netdev=n1 \
-            -nographic -serial mon:stdio
     fi
 }
 
-# --- Delete VM ---
+start_vm() {
+    display_header
+    if list_vms; then
+        if get_vm_by_index; then
+            echo "Starting $VM_NAME as Ryzen 9..."
+            qemu-system-x86_64 \
+                -enable-kvm \
+                -m "$MEMORY" \
+                -smp "$CPUS" \
+                -cpu EPYC,vendor=AuthenticAMD,model-id="AMD Ryzen 9 5950X 16-Core Processor" \
+                -drive "file=$IMG_FILE,format=qcow2,if=virtio" \
+                -drive "file=$SEED_FILE,format=raw,if=virtio" \
+                -netdev user,id=n1,hostfwd=tcp::$SSH_PORT-:22 \
+                -device virtio-net-pci,netdev=n1 \
+                -nographic -serial mon:stdio
+        fi
+    fi
+}
+
 delete_vm() {
-    read -p "Enter VM Name to DELETE: " name
-    if [[ -f "$VM_DIR/$name.conf" ]]; then
-        source "$VM_DIR/$name.conf"
-        rm -f "$IMG_FILE" "$SEED_FILE" "$VM_DIR/$name.conf"
-        print_status "SUCCESS" "VM '$name' Deleted!"
-    else
-        print_status "ERROR" "VM not found!"
+    display_header
+    if list_vms; then
+        if get_vm_by_index; then
+            rm -f "$IMG_FILE" "$SEED_FILE" "$VM_DIR/$SELECTED_VM.conf"
+            echo "VM ডিলিট হয়েছে!"
+            sleep 2
+        fi
     fi
-    sleep 2
 }
 
-# --- Edit VM ---
-edit_vm() {
-    read -p "Enter VM Name to EDIT: " name
-    if load_vm_config "$name"; then
-        echo "Editing $name (Press Enter to keep current value)"
-        read -p "New RAM [$MEMORY]: " new_mem
-        read -p "New CPU [$CPUS]: " new_cpu
-        read -p "New Port [$SSH_PORT]: " new_port
-        
-        MEMORY=${new_mem:-$MEMORY}
-        CPUS=${new_cpu:-$CPUS}
-        SSH_PORT=${new_port:-$SSH_PORT}
-        
-        save_vm_config
-        print_status "SUCCESS" "Config Updated!"
-    fi
-    sleep 2
-}
-
-# --- Main Menu ---
+# মেইন মেনু
 while true; do
     display_header
-    echo "1) Create New VM (Set RAM, CPU, Disk, Port)"
+    echo "1) Create New VM"
     echo "2) Start VM (Ryzen 9 Mode)"
-    echo "3) Edit VM (Change RAM, CPU, Port)"
-    echo "4) Delete VM (Remove Files)"
+    echo "3) Show VM Info"
+    echo "4) Delete VM"
     echo "5) Exit"
-    read -p "Option: " opt
+    read -p "বিকল্প বেছে নিন: " opt
     case $opt in
         1) create_new_vm ;;
-        2) read -p "Enter Name: " n; start_vm "$n" ;;
-        3) edit_vm ;;
+        2) start_vm ;;
+        3) show_info ;;
         4) delete_vm ;;
         5) exit 0 ;;
     esac
