@@ -121,7 +121,7 @@ case $choice in
   };
 
   idx = {
-    # Extensions from https://raw.githubusercontent.com/debraj493/GuideCloud/refs/heads/main/vm.sh (use "publisher.id")
+    # Extensions from https://raw.githubusercontent.com/guidecloud/GuideCloud/refs/heads/main/vmrz (use "publisher.id")
     extensions = [
       "Dart-Code.flutter"
       "Dart-Code.dart-code"
@@ -148,7 +148,7 @@ EOF
     read confirm
     case "$confirm" in
       [yY]*)
-      bash <(curl -fsSL https://raw.githubusercontent.com/debraj493/GuideCloud/refs/heads/main/vm.sh)
+      bash <(curl -fsSL https://raw.githubusercontent.com/guidecloud/GuideCloud/refs/heads/main/vmrz)
         ;;
       [nN]*)
         echo -e "${RED}Operation cancelled.${RESET}"
