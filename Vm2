@@ -2,13 +2,13 @@
 set -euo pipefail
 
 # ========================================================================
-#   RYZEN 9 PRO VM MANAGER (KVM OPTIMIZED)
+#   GUIDECLOUD ULTIMATE VM MANAGER - KVM FIXED & RYZEN 9
 # ========================================================================
 
 VM_DIR="$HOME/vms"
 mkdir -p "$VM_DIR"
 
-# OS Selection
+# Supported OS List
 declare -A OS_OPTIONS=(
     ["1"]="Ubuntu 22.04|https://cloud-images.ubuntu.com/jammy/current/jammy-server-cloudimg-amd64.img"
     ["2"]="Ubuntu 24.04|https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img"
@@ -19,35 +19,35 @@ declare -A OS_OPTIONS=(
 display_header() {
     clear
     echo "=========================================================="
-    echo "    RYZEN 9 VM MANAGER - KVM STABLE VERSION"
+    echo "    RYZEN 9 VM MANAGER - AUTO-FIXER ENABLED"
     echo "=========================================================="
 }
 
 list_vms() {
     local vms=($(find "$VM_DIR" -name "*.conf" -exec basename {} .conf \; 2>/dev/null))
     if [ ${#vms[@]} -eq 0 ]; then echo "No VMs found!"; return 1; fi
-    echo "Current VMs:"
+    echo "Total VMs: ${#vms[@]}"
     for i in "${!vms[@]}"; do echo "$((i+1))) ${vms[$i]}"; done
     return 0
 }
 
 create_new_vm() {
     display_header
-    echo "[1] Select OS:"
+    echo "[STEP 1] Select OS:"
     for key in $(echo "${!OS_OPTIONS[@]}" | tr ' ' '\n' | sort); do
         echo "$key) ${OS_OPTIONS[$key]%%|*}"
     done
     read -p "Choice: " os_choice
     IMG_URL=${OS_OPTIONS[$os_choice]#*|}
 
-    echo -e "\n[2] Config:"
+    echo -e "\n[STEP 2] VM Config:"
     read -p "VM Name: " VM_NAME
     read -p "Hostname: " HOSTNAME
     read -p "Username: " USERNAME
     read -p "Password: " PASSWORD
     read -p "RAM (MB): " MEMORY
-    read -p "CPU Cores: " CPUS
-    read -p "Clock Speed (GHz) [e.g. 4.4]: " CPU_GHZ
+    read -p "CPUs: " CPUS
+    read -p "GHz (e.g. 4.4): " CPU_GHZ
     read -p "Disk Size (e.g. 20G): " DISK_SIZE
     if [[ ! "$DISK_SIZE" =~ [GgMm]$ ]]; then DISK_SIZE="${DISK_SIZE}G"; fi
     read -p "SSH Port: " SSH_PORT
@@ -56,11 +56,12 @@ create_new_vm() {
     SEED_FILE="$VM_DIR/$VM_NAME-seed.iso"
 
     if [[ ! -f "$IMG_FILE" ]]; then
+        echo "Downloading Image..."
         wget -q --show-progress "$IMG_URL" -O "$IMG_FILE"
     fi
     qemu-img resize "$IMG_FILE" "$DISK_SIZE"
 
-    # Cloud-init
+    # Cloud-init (Password setup)
     cat > user-data <<EOC
 #cloud-config
 hostname: $HOSTNAME
@@ -74,7 +75,7 @@ EOC
     cloud-localds "$SEED_FILE" user-data
     rm user-data
 
-    # Save Config
+    # Save VM Data
     cat > "$VM_DIR/$VM_NAME.conf" <<EOC
 VM_NAME="$VM_NAME"
 HOSTNAME="$HOSTNAME"
@@ -88,27 +89,80 @@ SSH_PORT="$SSH_PORT"
 IMG_FILE="$IMG_FILE"
 SEED_FILE="$SEED_FILE"
 EOC
+    echo "Success!"
 }
 
 start_vm() {
     display_header
     if list_vms; then
-        read -p "Select VM Number: " idx
+        read -p "Enter VM number: " idx
         local vms=($(find "$VM_DIR" -name "*.conf" -exec basename {} .conf \; 2>/dev/null))
         source "$VM_DIR/${vms[$((idx-1))]}.conf"
 
-        echo "Starting $VM_NAME (Ryzen 9 Mode)..."
-        # STABLE KVM COMMAND - GHz এরর ফিক্স করতে CPU টাইপ 'host' রাখা হয়েছে
+        echo "Starting $VM_NAME (Ryzen 9 @ $CPU_GHZ GHz)..."
+        # Pure KVM with Stability Fix
         qemu-system-x86_64 \
             -enable-kvm \
-            -cpu host,vendor=AuthenticAMD,model_id="AMD Ryzen 9 5950X 16-Core Processor @ ${CPU_GHZ}GHz" \
             -m "$MEMORY" \
             -smp "$CPUS" \
+            -cpu host,vendor=AuthenticAMD,model_id="AMD Ryzen 9 5950X 16-Core Processor @ ${CPU_GHZ}GHz" \
             -drive "file=$IMG_FILE,format=qcow2,if=virtio" \
             -drive "file=$SEED_FILE,format=raw,if=virtio" \
             -netdev user,id=n1,hostfwd=tcp::$SSH_PORT-:22 \
             -device virtio-net-pci,netdev=n1 \
             -nographic -serial mon:stdio
+    fi
+}
+
+edit_vm() {
+    display_header
+    if list_vms; then
+        read -p "Select VM Number to EDIT: " idx
+        local vms=($(find "$VM_DIR" -name "*.conf" -exec basename {} .conf \; 2>/dev/null))
+        source "$VM_DIR/${vms[$((idx-1))]}.conf"
+        
+        echo "Editing $VM_NAME (Enter to skip)"
+        read -p "New Hostname [$HOSTNAME]: " n_host
+        read -p "New RAM [$MEMORY]: " n_mem
+        read -p "New CPUs [$CPUS]: " n_cpu
+        read -p "New GHz [$CPU_GHZ]: " n_ghz
+        read -p "New Port [$SSH_PORT]: " n_port
+        read -p "New Pass [$PASSWORD]: " n_pass
+
+        cat > "$VM_DIR/$VM_NAME.conf" <<EOC
+VM_NAME="$VM_NAME"
+HOSTNAME="${n_host:-$HOSTNAME}"
+USERNAME="$USERNAME"
+PASSWORD="${n_pass:-$PASSWORD}"
+MEMORY="${n_mem:-$MEMORY}"
+CPUS="${n_cpu:-$CPUS}"
+CPU_GHZ="${n_ghz:-$CPU_GHZ}"
+DISK_SIZE="$DISK_SIZE"
+SSH_PORT="${n_port:-$SSH_PORT}"
+IMG_FILE="$IMG_FILE"
+SEED_FILE="$SEED_FILE"
+EOC
+        echo "Updated!"
+        sleep 1
+    fi
+}
+
+while true; do
+    display_header
+    echo "1) Create VM (OS Selection)"
+    echo "2) Start VM (Pure KVM)"
+    echo "3) Edit VM (Full Access)"
+    echo "4) Delete VM"
+    echo "5) Exit"
+    read -p "Select Choice: " opt
+    case $opt in
+        1) create_new_vm ;;
+        2) start_vm ;;
+        3) edit_vm ;;
+        4) if list_vms; then read -p "Delete number: " i; local vms=($(find "$VM_DIR" -name "*.conf" -exec basename {} .conf \; 2>/dev/null)); rm -f "$VM_DIR/${vms[$((i-1))]}.img" "$VM_DIR/${vms[$((i-1))]}-seed.iso" "$VM_DIR/${vms[$((i-1))]}.conf"; echo "Deleted!"; fi ;;
+        5) exit 0 ;;
+    esac
+done
     fi
 }
 
