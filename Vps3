@@ -2,36 +2,53 @@
 set -euo pipefail
 
 # ========================================================
-# GUIDECLOUD PRO VM MANAGER (RYZEN 9 VERSION) - UPDATED
+#    GUIDECLOUD PRO VM MANAGER - RYZEN 9 EDITION
 # ========================================================
 
 VM_DIR="$HOME/vms"
 mkdir -p "$VM_DIR"
 
-# OS অপশনগুলোর তালিকা
+# কালার কোড
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+CYAN='\033[0;36m'
+YELLOW='\033[1;33m'
+PURPLE='\033[0;35m'
+NC='\033[0m' # No Color
+
+# OS লিস্ট (নতুন এবং পুরনো সব ভার্সন)
 declare -A OS_LIST=(
-    ["1"]="Ubuntu 22.04|https://cloud-images.ubuntu.com/jammy/current/jammy-server-cloudimg-amd64.img"
-    ["2"]="Debian 12|https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-generic-amd64.qcow2"
-    ["3"]="Parrot OS|https://download.parrot.sh/parrot/iso/6.1/Parrot-architect-6.1_amd64.iso"
+    ["1"]="Ubuntu 24.04 LTS (Latest)|https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img"
+    ["2"]="Ubuntu 22.04 LTS (Old)|https://cloud-images.ubuntu.com/jammy/current/jammy-server-cloudimg-amd64.img"
+    ["3"]="Debian 12 (Latest)|https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-generic-amd64.qcow2"
+    ["4"]="Debian 11 (Old)|https://cloud.debian.org/images/cloud/bullseye/latest/debian-11-generic-amd64.qcow2"
+    ["5"]="Parrot OS Security|https://download.parrot.sh/parrot/iso/6.1/Parrot-architect-6.1_amd64.iso"
 )
 
 display_header() {
     clear
-    echo "=========================================================="
-    echo "    RYZEN 9 VM MANAGER - ADVANCED CONTROL (ENG)"
-    echo "=========================================================="
+    echo -e "${CYAN}##########################################################${NC}"
+    echo -e "${PURPLE}    ______       _     _        _____ _                 _ ${NC}"
+    echo -e "${PURPLE}   |  ____|     (_)   | |      / ____| |               | |${NC}"
+    echo -e "${PURPLE}   | |  __ _   _ _  __| | ___ | |    | | ___  _   _  __| |${NC}"
+    echo -e "${PURPLE}   | | |_ | | | | |/ _\` |/ _ \| |    | |/ _ \| | | |/ _\` |${NC}"
+    echo -e "${PURPLE}   | |__| | |_| | | (_| |  __/| |____| | (_) | |_| | (_| |${NC}"
+    echo -e "${PURPLE}   |______|\__,_|_|\__,_|\___| \_____|_|\___/ \__,_|\__,_|${NC}"
+    echo -e "${CYAN}##########################################################${NC}"
+    echo -e "${YELLOW}           RYZEN 9 VM MANAGER - ADVANCED CONTROL${NC}"
+    echo -e "${CYAN}##########################################################${NC}"
 }
 
 list_vms() {
     local vms=($(find "$VM_DIR" -name "*.conf" -exec basename {} .conf \; 2>/dev/null))
-    echo "Total VMs found: ${#vms[@]}"
+    echo -e "${GREEN}Total VMs found: ${#vms[@]}${NC}"
     if [ ${#vms[@]} -eq 0 ]; then
         echo "No VMs found!"
         return 1
     fi
     echo "--------------------------------"
     for i in "${!vms[@]}"; do
-        echo "$((i+1))) ${vms[$i]}"
+        echo -e "${YELLOW}$((i+1)))${NC} ${vms[$i]}"
     done
     echo "--------------------------------"
     return 0
@@ -39,69 +56,73 @@ list_vms() {
 
 get_vm_by_index() {
     local vms=($(find "$VM_DIR" -name "*.conf" -exec basename {} .conf \; 2>/dev/null))
-    read -p "Enter VM number from the list: " idx
+    read -p "Enter VM number: " idx
     if [[ "$idx" =~ ^[0-9]+$ ]] && [ "$idx" -le "${#vms[@]}" ] && [ "$idx" -gt 0 ]; then
         SELECTED_VM="${vms[$((idx-1))]}"
         source "$VM_DIR/$SELECTED_VM.conf"
         return 0
     else
-        echo "Error: Invalid selection!"
+        echo -e "${RED}Error: Invalid selection!${NC}"
         return 1
     fi
 }
 
 create_new_vm() {
     display_header
-    echo "[CREATE NEW VM]"
+    echo -e "${GREEN}[CREATE NEW VM]${NC}"
     
-    # OS বেছে নেওয়ার মেনু
-    echo "Select OS:"
-    echo "1) Ubuntu 22.04"
-    echo "2) Debian 12"
-    echo "3) Parrot OS"
-    read -p "Choice [1-3]: " os_choice
+    echo "Select OS Version:"
+    echo "1) Ubuntu 24.04 (Noble)"
+    echo "2) Ubuntu 22.04 (Jammy)"
+    echo "3) Debian 12 (Bookworm)"
+    echo "4) Debian 11 (Bullseye)"
+    echo "5) Parrot OS"
+    read -p "Choice [1-5]: " os_choice
     
     SELECTED_OS_DATA=${OS_LIST[$os_choice]}
-    IMG_URL=$(echo $SELECTED_OS_DATA | cut -d'|' -f2)
+    OS_FULL_NAME=$(echo "$SELECTED_OS_DATA" | cut -d'|' -f1)
+    IMG_URL=$(echo "$SELECTED_OS_DATA" | cut -d'|' -f2)
 
-    read -p "1. VM File Name (e.g. vps1): " VM_NAME
-    read -p "2. Hostname (e.g. guidecloud): " HOSTNAME
-    read -p "3. Username (e.g. admin): " USERNAME
+    read -p "1. VM File Name: " VM_NAME
+    read -p "2. Hostname: " HOSTNAME
+    read -p "3. Username: " USERNAME
     read -p "4. Password: " PASSWORD
-    read -p "5. RAM (MB) [e.g. 2048]: " MEMORY
-    read -p "6. CPU Cores [e.g. 2]: " CPUS
-    read -p "7. CPU Clock Speed (GHz) [e.g. 3.8]: " CPU_GHZ
+    read -p "5. RAM (MB) [2048]: " MEMORY
+    read -p "6. CPU Cores [2]: " CPUS
+    read -p "7. CPU Clock Speed (GHz) [3.8]: " CPU_GHZ
     read -p "8. Disk Size (e.g. 200G): " DISK_SIZE
-    read -p "9. SSH Port [e.g. 3000]: " SSH_PORT
+    read -p "9. SSH Port [3000]: " SSH_PORT
 
     IMG_FILE="$VM_DIR/$VM_NAME.img"
     SEED_FILE="$VM_DIR/$VM_NAME-seed.iso"
 
     if [[ ! -f "$IMG_FILE" ]]; then
-        echo "Downloading OS Image..."
+        echo -e "${CYAN}Downloading $OS_FULL_NAME...${NC}"
         wget -q --show-progress "$IMG_URL" -O "$IMG_FILE"
     fi
 
-    echo "Configuring Disk..."
+    echo -e "${CYAN}Configuring Disk to $DISK_SIZE...${NC}"
     qemu-img resize "$IMG_FILE" "$DISK_SIZE"
 
-    # Cloud-init (এখানেই ডকার ইন্সটল কমান্ড যোগ করা হয়েছে)
+    # Cloud-init with Full Docker Support
     cat > user-data <<EOC
 #cloud-config
 hostname: $HOSTNAME
 ssh_pwauth: true
+package_update: true
+packages:
+  - curl
+  - docker.io
+  - docker-compose
 users:
   - name: $USERNAME
     sudo: ALL=(ALL) NOPASSWD:ALL
     shell: /bin/bash
     lock_passwd: false
     passwd: $(openssl passwd -6 "$PASSWORD")
-packages:
-  - docker.io
-  - docker-compose
-  - curl
 runcmd:
   - systemctl enable --now docker
+  - usermod -aG docker $USERNAME
 chpasswd:
   list: |
     root:$PASSWORD
@@ -109,6 +130,70 @@ chpasswd:
   expire: false
 EOC
     echo "instance-id: iid-$VM_NAME" > meta-data
+    cloud-localds "$SEED_FILE" user-data meta-data
+    rm user-data meta-data
+
+    cat > "$VM_DIR/$VM_NAME.conf" <<EOC
+VM_NAME="$VM_NAME"
+HOSTNAME="$HOSTNAME"
+MEMORY="$MEMORY"
+CPUS="$CPUS"
+CPU_GHZ="$CPU_GHZ"
+DISK_SIZE="$DISK_SIZE"
+SSH_PORT="$SSH_PORT"
+USERNAME="$USERNAME"
+PASSWORD="$PASSWORD"
+IMG_FILE="$IMG_FILE"
+SEED_FILE="$SEED_FILE"
+EOC
+    echo -e "${GREEN}Success: $OS_FULL_NAME Created with Docker Support!${NC}"
+    sleep 2
+}
+
+start_vm() {
+    display_header
+    if list_vms; then
+        if get_vm_by_index; then
+            echo -e "${CYAN}Starting $VM_NAME with Ryzen 9 @ $CPU_GHZ GHz...${NC}"
+            
+            ACCEL="tcg"
+            CPU_MODEL="max"
+            if [ -e /dev/kvm ]; then
+                ACCEL="kvm"
+                CPU_MODEL="host"
+            fi
+
+            qemu-system-x86_64 \
+                -accel "$ACCEL" \
+                -m "$MEMORY" \
+                -smp "$CPUS" \
+                -cpu "$CPU_MODEL",vendor=AuthenticAMD,model_id="AMD Ryzen 9 5950X 16-Core Processor @ ${CPU_GHZ}GHz" \
+                -drive "file=$IMG_FILE,format=qcow2,if=virtio" \
+                -drive "file=$SEED_FILE,format=raw,if=virtio" \
+                -netdev user,id=n1,hostfwd=tcp::$SSH_PORT-:22 \
+                -device virtio-net-pci,netdev=n1 \
+                -nographic -serial mon:stdio
+        fi
+    fi
+}
+
+while true; do
+    display_header
+    echo -e "${YELLOW}1)${NC} Create New VM"
+    echo -e "${YELLOW}2)${NC} Show VM List"
+    echo -e "${YELLOW}3)${NC} Start VM (Ryzen 9 Mode)"
+    echo -e "${YELLOW}4)${NC} Delete VM"
+    echo -e "${YELLOW}0)${NC} Exit"
+    echo -e "${CYAN}--------------------------------${NC}"
+    read -p "Select Option: " opt
+    case $opt in
+        1) create_new_vm ;;
+        2) display_header; list_vms; read -p "Press Enter..." ;;
+        3) start_vm ;;
+        4) if list_vms; then if get_vm_by_index; then rm -f "$IMG_FILE" "$SEED_FILE" "$VM_DIR/$SELECTED_VM.conf"; echo "Deleted!"; sleep 2; fi; fi ;;
+        0) exit 0 ;;
+    esac
+done
     cloud-localds "$SEED_FILE" user-data meta-data
     rm user-data meta-data
 
