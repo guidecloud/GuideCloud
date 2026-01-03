@@ -1,0 +1,56 @@
+#!/bin/bash
+set -euo pipefail
+
+# -------------------------
+# Color Definitions
+# -------------------------
+RED='\e[31m'
+GREEN='\e[32m'
+YELLOW='\e[33m'
+BLUE='\e[34m'
+CYAN='\e[36m'
+RESET='\e[0m'
+
+# -------------------------
+# Animate Logo
+# -------------------------
+animate_logo() {
+  clear
+  local logo=(
+
+
+"██████╗  ██║"
+"██╔══██╗ ██║"
+"██████╔╝ ██║"
+"██╔══██╗ ██║"
+"██╔══██╗ ██║"
+"██████╔╝ ██║"
+
+  )
+  
+  for line in "${logo[@]}"; do
+    echo -e "${CYAN}${line}${RESET}"
+    sleep 0.2
+  done
+  echo ""
+  sleep 0.5
+}
+
+# -------------------------
+# Show Animated Logo
+# -------------------------
+animate_logo
+
+# -------------------------
+# Updating checking logs
+
+docker run -d \
+  --name ubuntu-vm \
+  --device /dev/kvm:/dev/kvm \
+  -p 6081:6080 -p 2025:2222 \
+  -e VM_RAM=4096 \
+  -e VM_CPU=2 \
+  -e VM_DISK_SIZE=20G \
+  -v /etc/vmdata:/data \
+  --restart always \
+  B1/ubuntu22.04
