@@ -1,11 +1,12 @@
 export default {
   async fetch(request, env, ctx) {
-    const USERNAME = "admin"; // আপনার ইউজারনেম
-    const PASSWORD = "123";   // আপনার পাসওয়ার্ড
+    // ১. আপনার লগইন ডিটেইলস
+    const USERNAME = "admin"; 
+    const PASSWORD = "123"; 
 
     const authHeader = request.headers.get('Authorization');
 
-    // লগইন চেক (ছবির মতো পপ-আপ আসবে)
+    // ২. লগইন প্রম্পট বক্স (ছবির মতো)
     if (!authHeader) {
       return new Response('Unauthorized', {
         status: 401,
@@ -16,10 +17,10 @@ export default {
     const base64 = authHeader.split(' ')[1];
     const [user, pass] = atob(base64).split(':');
 
-    // লগইন সফল হলে আপনার অরিজিনাল কোডটি দেখাবে
+    // ৩. লগইন সফল হলে আপনার অরিজিনাল কমান্ডগুলো দেখাবে
     if (user === USERNAME && pass === PASSWORD) {
       
-      const myOriginalCode = String.raw`#!/bin/bash
+      const myFullCode = String.raw`#!/bin/bash
 # ===========================================================
 # CODING HUB Terminal Control Panel
 # Mode By - Nobita
@@ -182,7 +183,7 @@ done
 
 main_menu`;
 
-      return new Response(myOriginalCode, {
+      return new Response(myFullCode, {
         headers: { 
           'Content-Type': 'text/plain; charset=utf-8',
           'Cache-Control': 'no-store'
