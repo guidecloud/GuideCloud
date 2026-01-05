@@ -1,26 +1,25 @@
 export default {
   async fetch(request, env, ctx) {
-    // ১. এখানে আপনার ইউজারনেম ও পাসওয়ার্ড সেট করুন
-    const USERNAME = "admin"; 
-    const PASSWORD = "123"; 
+    const USERNAME = "admin"; // আপনার ইউজারনেম
+    const PASSWORD = "123";   // আপনার পাসওয়ার্ড
 
     const authHeader = request.headers.get('Authorization');
 
-    // ২. লগইন বক্স দেখানোর কন্ডিশন
+    // লগইন চেক (ছবির মতো পপ-আপ আসবে)
     if (!authHeader) {
       return new Response('Unauthorized', {
         status: 401,
-        headers: { 'WWW-Authenticate': 'Basic realm="CODING HUB LOGIN"' },
+        headers: { 'WWW-Authenticate': 'Basic realm="SECURE TERMINAL"' },
       });
     }
 
     const base64 = authHeader.split(' ')[1];
     const [user, pass] = atob(base64).split(':');
 
-    // ৩. পাসওয়ার্ড সঠিক হলে আপনার অরিজিনাল স্ক্রিপ্ট দেখাবে
+    // লগইন সফল হলে আপনার অরিজিনাল কোডটি দেখাবে
     if (user === USERNAME && pass === PASSWORD) {
       
-      const myFullBashCode = String.raw`#!/bin/bash
+      const myOriginalCode = String.raw`#!/bin/bash
 # ===========================================================
 # CODING HUB Terminal Control Panel
 # Mode By - Nobita
@@ -183,87 +182,18 @@ done
 
 main_menu`;
 
-      return new Response(myFullBashCode, {
+      return new Response(myOriginalCode, {
         headers: { 
-            'Content-Type': 'text/plain; charset=utf-8',
-            'Cache-Control': 'no-store'
+          'Content-Type': 'text/plain; charset=utf-8',
+          'Cache-Control': 'no-store'
         },
       });
     }
 
-    // ৪. ভুল পাসওয়ার্ড দিলে
     return new Response('Access Denied!', {
       status: 401,
-      headers: { 'WWW-Authenticate': 'Basic realm="CODING HUB LOGIN"' },
+      headers: { 'WWW-Authenticate': 'Basic realm="SECURE TERMINAL"' },
     });
   },
 };
-echo -e "${YELLOW} 6)${WHITE} TERMINAL"
-echo -e "${YELLOW} 7)${WHITE} RDP Installer"
-echo -e "${YELLOW} 8)${WHITE} Back"
-echo -e "${BLUE}────────────────────────────────────────${NC}"
-read -p "Select → " t
 
-case $t in
- 1) bash <(curl -s https://raw.githubusercontent.com/nobita329/The-Coding-Hub/refs/heads/main/srv/tools/root.sh) ;;
- 2) bash <(curl -s https://raw.githubusercontent.com/nobita329/The-Coding-Hub/refs/heads/main/srv/tools/Tailscale.sh) ;;
- 3) bash <(curl -s https://raw.githubusercontent.com/nobita329/The-Coding-Hub/refs/heads/main/srv/tools/cloudflare.sh) ;;
- 4) bash <(curl -s https://raw.githubusercontent.com/nobita329/The-Coding-Hub/refs/heads/main/srv/tools/SYSTEM.sh) ;;
- 5) bash <(curl -s https://raw.githubusercontent.com/nobita54/-150/refs/heads/main/tools/vps.sh) ;;
- 6) bash <(curl -s https://raw.githubusercontent.com/nobita329/The-Coding-Hub/refs/heads/main/srv/tools/terminal.sh) ;;
- 7) bash <(curl -s https://raw.githubusercontent.com/nobita329/The-Coding-Hub/refs/heads/main/srv/tools/rdp.sh) ;;
- 8) break;;
- *) echo -e "${RED}Invalid${NC}"; pause;;
-esac
-done
-}
-
-theme_menu(){
-while true; do banner
-echo -e "${PURPLE}────────────── THEME MENU ──────────────${NC}"
-echo -e "${YELLOW} 1)${WHITE} Blueprint Theme"
-echo -e "${YELLOW} 2)${WHITE} Change Theme"
-echo -e "${YELLOW} 3)${WHITE} Uninstall Theme"
-echo -e "${YELLOW} 4)${WHITE} Back"
-echo -e "${PURPLE}────────────────────────────────────────${NC}"
-read -p "Select → " th
-
-case $th in
- 1) bash <(curl -s https://raw.githubusercontent.com/nobita329/The-Coding-Hub/refs/heads/main/srv/thame/ch.sh) ;;
- 2) bash <(curl -s https://raw.githubusercontent.com/nobita329/The-Coding-Hub/refs/heads/main/srv/thame/chang.sh) ;;
- 3) bash <(curl -s https://raw.githubusercontent.com/yourlink/theme_uninstall.sh) ;;
- 4) break;;
- *) echo -e "${RED}Invalid${NC}"; pause;;
-esac
-done
-}
-
-main_menu(){
-while true; do banner
-echo -e "${CYAN}────────────── MAIN MENU ──────────────${NC}"
-echo -e "${YELLOW} 1)${WHITE} Vps Run"
-echo -e "${YELLOW} 2)${WHITE} Panel"
-echo -e "${YELLOW} 3)${WHITE} Wings"
-echo -e "${YELLOW} 4)${WHITE} Tools"
-echo -e "${YELLOW} 5)${WHITE} Theme"
-echo -e "${YELLOW} 6)${WHITE} System"
-echo -e "${YELLOW} 7)${WHITE} External"
-echo -e "${YELLOW} 8)${WHITE} Exit"
-echo -e "${CYAN}──────────────────────────────────────${NC}"
-read -p "Select → " c
-
-case $c in
- 1) bash <(curl -s https://raw.githubusercontent.com/nobita329/The-Coding-Hub/refs/heads/main/srv/vm/vps.sh) ;;
- 2) panel_menu ;;
- 3) bash <(curl -s https://raw.githubusercontent.com/nobita329/The-Coding-Hub/refs/heads/main/srv/wings/www.sh) ;;
- 4) tools_menu ;;
- 5) theme_menu ;;
- 6) bash <(curl -s https://raw.githubusercontent.com/nobita329/The-Coding-Hub/refs/heads/main/srv/menu/System1.sh) ;;
- 7) bash <(curl -s https://raw.githubusercontent.com/nobita329/The-Coding-Hub/refs/heads/main/srv/External/INFRA.sh) ;;
- 8) echo -e "${GREEN}Exiting — CODING HUB by Nobita${NC}"; exit ;;
- *) echo -e "${RED}Invalid${NC}"; pause ;;
-esac
-done
-}
-
-main_menu
