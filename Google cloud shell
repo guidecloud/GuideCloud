@@ -1,0 +1,54 @@
+# 1. Install Tailscale on Google Cloud Shell
+curl -fsSL https://tailscale.com/install.sh | sh > /dev/null 2>&1
+
+# 2. Setup Tailscale Connection
+clear
+echo "Get your Auth Key from: https://login.tailscale.com/admin/settings/keys"
+read -p "Paste your Tailscale Auth Key: " TS_KEY
+sudo tailscale up --authkey=$TS_KEY --hostname=cloud-shell-windows
+
+# 3. Check if Tailscale is active
+if tailscale status > /dev/null 2>&1; then
+    echo "Tailscale is connected successfully!"
+else
+    echo "Tailscale Connection Failed! Please check your Auth Key."
+    exit 1
+fi
+
+# 4. Run the Windows 10 Docker Container (NoMachine)
+echo "Starting Windows 10 Container... Please wait."
+docker run --rm -d --network host --privileged --name nomachine-xfce4 \
+-e PASSWORD=123456 -e USER=user \
+--cap-add=SYS_PTRACE --shm-size=1g \
+thuonghai2711/nomachine-ubuntu-desktop:windows10
+
+# 5. Display Connection Information
+clear
+echo "===================================================="
+echo "          WINDOWS RDP READY (TAILSCALE)             "
+echo "===================================================="
+echo "Download NoMachine: https://www.nomachine.com/download"
+echo ""
+echo "Steps to connect:"
+echo "1. Open Tailscale on your local PC."
+echo "2. Find the IP address for device: 'cloud-shell-windows'"
+echo "3. Use that IP in NoMachine to connect."
+echo ""
+echo "Login Credentials:"
+echo "Username: user"
+echo "Password: 123456"
+echo "===================================================="
+
+# 6. Keep Alive Timer
+seq 1 43200 | while read i; do 
+    echo -en "\r Running .     $i s /43200 s";sleep 0.1;
+    echo -en "\r Running ..    $i s /43200 s";sleep 0.1;
+    echo -en "\r Running ...   $i s /43200 s";sleep 0.1;
+    echo -en "\r Running ....  $i s /43200 s";sleep 0.1;
+    echo -en "\r Running ..... $i s /43200 s";sleep 0.1;
+    echo -en "\r Running     . $i s /43200 s";sleep 0.1;
+    echo -en "\r Running  .... $i s /43200 s";sleep 0.1;
+    echo -en "\r Running   ... $i s /43200 s";sleep 0.1;
+    echo -en "\r Running    .. $i s /43200 s";sleep 0.1;
+    echo -en "\r Running     . $i s /43200 s";sleep 0.1; 
+done
