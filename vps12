@@ -1,0 +1,169 @@
+cat << 'EOF' > vm_manager.sh
+#!/bin/bash
+set -euo pipefail
+
+VM_DIR="$HOME/vms"
+mkdir -p "$VM_DIR"
+
+display_header() {
+    clear
+    echo "=========================================================="
+    echo "        RYZEN 9 VM MANAGER - AUTO FIX VERSION"
+    echo "=========================================================="
+}
+
+list_vms() {
+    mapfile -t vms < <(find "$VM_DIR" -name "*.conf" -exec basename {} .conf \; 2>/dev/null)
+
+    echo "----------------------------------------------------------"
+    echo "Total VMs found: ${#vms[@]}"
+    echo "----------------------------------------------------------"
+
+    if [ ${#vms[@]} -eq 0 ]; then
+        echo "No VMs found!"
+        return 1
+    fi
+
+    for i in "${!vms[@]}"; do
+        echo "$((i+1))) ${vms[$i]}"
+    done
+
+    return 0
+}
+
+get_vm_by_index() {
+    mapfile -t vms < <(find "$VM_DIR" -name "*.conf" -exec basename {} .conf \; 2>/dev/null)
+
+    read -p "Enter VM number from the list: " idx
+
+    if [[ "$idx" =~ ^[0-9]+$ ]] && [ "$idx" -le "${#vms[@]}" ] && [ "$idx" -gt 0 ]; then
+        SELECTED_VM="${vms[$((idx-1))]}"
+        source "$VM_DIR/$SELECTED_VM.conf"
+        return 0
+    else
+        echo "Error: Invalid selection!"
+        return 1
+    fi
+}
+
+create_new_vm() {
+    display_header
+    echo "[CREATE NEW VM]"
+
+    read -p "1. VM Name: " VM_NAME
+    read -p "2. Hostname: " HOSTNAME
+    read -p "3. Username: " USERNAME
+    read -p "4. Password: " PASSWORD
+    read -p "5. RAM (MB): " MEMORY
+    read -p "6. CPU Cores: " CPUS
+    read -p "7. Disk Size (e.g. 20G): " DISK_SIZE
+    read -p "8. SSH Port: " SSH_PORT
+
+    IMG_FILE="$VM_DIR/$VM_NAME.img"
+    SEED_FILE="$VM_DIR/$VM_NAME-seed.iso"
+
+    if [[ ! -f "$IMG_FILE" ]]; then
+        echo "Downloading Ubuntu 22.04 image..."
+        wget https://cloud-images.ubuntu.com/jammy/current/jammy-server-cloudimg-amd64.img -O "$IMG_FILE"
+    fi
+
+    echo "Resizing disk..."
+    qemu-img resize "$IMG_FILE" "$DISK_SIZE"
+
+    cat > user-data <<EOL
+#cloud-config
+hostname: $HOSTNAME
+users:
+  - name: $USERNAME
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    groups: sudo
+    shell: /bin/bash
+    plain_text_passwd: $PASSWORD
+    lock_passwd: false
+chpasswd:
+  expire: false
+ssh_pwauth: true
+EOL
+
+    echo "instance-id: iid-$VM_NAME" > meta-data
+    cloud-localds "$SEED_FILE" user-data meta-data
+    rm -f user-data meta-data
+
+    cat > "$VM_DIR/$VM_NAME.conf" <<EOL
+VM_NAME="$VM_NAME"
+HOSTNAME="$HOSTNAME"
+MEMORY="$MEMORY"
+CPUS="$CPUS"
+DISK_SIZE="$DISK_SIZE"
+SSH_PORT="$SSH_PORT"
+USERNAME="$USERNAME"
+PASSWORD="$PASSWORD"
+IMG_FILE="$IMG_FILE"
+SEED_FILE="$SEED_FILE"
+EOL
+
+    echo "Success: VM '$VM_NAME' Created!"
+    sleep 2
+}
+
+start_vm() {
+    display_header
+    if list_vms && get_vm_by_index; then
+
+        if ss -tln | grep -q ":$SSH_PORT "; then
+            echo "ERROR: Port $SSH_PORT is already in use."
+            read -p "Press Enter to continue..."
+            return
+        fi
+
+        echo "Starting VM $VM_NAME..."
+
+        qemu-system-x86_64 \
+            -m "$MEMORY" \
+            -smp "$CPUS" \
+            -hda "$IMG_FILE" \
+            -cdrom "$SEED_FILE" \
+            -netdev user,id=net0,hostfwd=tcp::$SSH_PORT-:22 \
+            -device virtio-net,netdev=net0 \
+            -enable-kvm \
+            -nographic &
+
+        echo "VM Started Successfully!"
+        echo "SSH Command:"
+        echo "ssh $USERNAME@localhost -p $SSH_PORT"
+
+        read -p "Press Enter to continue..."
+    fi
+}
+
+delete_vm() {
+    display_header
+    if list_vms && get_vm_by_index; then
+        rm -f "$IMG_FILE" "$SEED_FILE" "$VM_DIR/$VM_NAME.conf"
+        echo "VM Deleted Successfully!"
+        sleep 2
+    fi
+}
+
+while true; do
+    display_header
+    echo "1) Create New VM"
+    echo "2) Show VM List"
+    echo "3) Start VM"
+    echo "4) Delete VM"
+    echo "5) Exit"
+    echo "--------------------------------"
+    read -p "Select Option: " opt
+
+    case $opt in
+        1) create_new_vm ;;
+        2) display_header; list_vms; read -p "Press Enter..." ;;
+        3) start_vm ;;
+        4) delete_vm ;;
+        5) exit 0 ;;
+        *) echo "Invalid option!"; sleep 1 ;;
+    esac
+done
+EOF
+
+chmod +x vm_manager.sh
