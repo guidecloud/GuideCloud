@@ -1,10 +1,10 @@
+# যদি আগে কোনো ফাইল থেকে থাকে তা মুছে ফেলার জন্য
+rm -f vm_manager.sh
+
+# নতুন ফাইল তৈরি করার জন্য নিচের পুরো ব্লকটি একসাথে কপি করে পেস্ট করুন
 cat << 'EOF' > vm_manager.sh
 #!/bin/bash
 set -euo pipefail
-
-# ========================================================
-# GUIDECLOUD PRO VM MANAGER (RYZEN 9 OPTIMIZED)
-# ========================================================
 
 VM_DIR="$HOME/vms"
 mkdir -p "$VM_DIR"
@@ -66,7 +66,6 @@ create_new_vm() {
         qemu-img resize "$IMG_FILE" "$DISK_SIZE"
     fi
 
-    # Cloud-init user-data generation
     cat > user-data <<EOC
 #cloud-config
 hostname: $HOSTNAME
@@ -88,7 +87,6 @@ EOC
     cloud-localds "$SEED_FILE" user-data meta-data
     rm user-data meta-data
 
-    # Save Config
     cat > "$VM_DIR/$VM_NAME.conf" <<EOC
 VM_NAME="$VM_NAME"
 HOSTNAME="$HOSTNAME"
@@ -116,7 +114,6 @@ start_vm() {
             fi
 
             echo "Starting $VM_NAME in Ryzen 9 Passthrough Mode..."
-            # QEMU Command with Ryzen Optimization
             screen -dmS "$VM_NAME" qemu-system-x86_64 \
                 -m "$MEMORY" \
                 -smp "$CPUS",sockets=1,cores="$CPUS",threads=1 \
@@ -127,57 +124,9 @@ start_vm() {
                 -net user,hostfwd=tcp::"$SSH_PORT"-:22 \
                 -nographic
 
-            echo "VM $VM_NAME is running in background (Screen session: $VM_NAME)"
-            echo "Connect via: ssh $USERNAME@localhost -p $SSH_PORT"
+            echo "VM $VM_NAME is running in background!"
+            echo "SSH Command: ssh $USERNAME@localhost -p $SSH_PORT"
             read -p "Press Enter to return..."
-        fi
-    fi
-}
-
-edit_vm() {
-    display_header
-    if list_vms; then
-        if get_vm_by_index; then
-            echo "Editing $VM_NAME (Leave blank to keep current value)"
-            read -p "New Hostname [$HOSTNAME]: " n_host
-            read -p "New RAM [$MEMORY]: " n_mem
-            read -p "New CPU [$CPUS]: " n_cpu
-            read -p "New SSH Port [$SSH_PORT]: " n_port
-            
-            HOSTNAME=${n_host:-$HOSTNAME}
-            MEMORY=${n_mem:-$MEMORY}
-            CPUS=${n_cpu:-$CPUS}
-            SSH_PORT=${n_port:-$SSH_PORT}
-            
-            cat > "$VM_DIR/$VM_NAME.conf" <<EOC
-VM_NAME="$VM_NAME"
-HOSTNAME="$HOSTNAME"
-MEMORY="$MEMORY"
-CPUS="$CPUS"
-DISK_SIZE="$DISK_SIZE"
-SSH_PORT="$SSH_PORT"
-USERNAME="$USERNAME"
-PASSWORD="$PASSWORD"
-IMG_FILE="$IMG_FILE"
-SEED_FILE="$SEED_FILE"
-EOC
-            echo "Update Successful!"
-            sleep 2
-        fi
-    fi
-}
-
-delete_vm() {
-    display_header
-    if list_vms; then
-        if get_vm_by_index; then
-            read -p "Are you sure you want to delete $VM_NAME? (y/n): " confirm
-            if [[ "$confirm" == "y" ]]; then
-                screen -X -S "$VM_NAME" quit 2>/dev/null || true
-                rm -f "$VM_DIR/$VM_NAME.conf" "$IMG_FILE" "$SEED_FILE"
-                echo "VM Deleted."
-                sleep 2
-            fi
         fi
     fi
 }
@@ -185,23 +134,15 @@ delete_vm() {
 while true; do
     display_header
     echo "1) Create New VM"
-    echo "2) Show VM List & Info"
+    echo "2) Show VM List"
     echo "3) Start VM (Ryzen 9 Mode)"
-    echo "4) Edit VM Configuration"
-    echo "5) Delete VM"
-    echo "6) Exit"
-    echo "--------------------------------"
-    read -p "Select Option: " opt
+    echo "4) Exit"
+    read -p "Select: " opt
     case $opt in
         1) create_new_vm ;;
-        2) display_header; list_vms; read -p "Press Enter to return..." ;;
+        2) display_header; list_vms; read -p "Press Enter..." ;;
         3) start_vm ;;
-        4) edit_vm ;;
-        5) delete_vm ;;
-        6) exit 0 ;;
-        *) echo "Invalid Option" ; sleep 1 ;;
+        4) exit 0 ;;
     esac
 done
 EOF
-chmod +x vm_manager.sh
-
