@@ -1,10 +1,10 @@
-# যদি আগে কোনো ফাইল থেকে থাকে তা মুছে ফেলার জন্য
-rm -f vm_manager.sh
-
-# নতুন ফাইল তৈরি করার জন্য নিচের পুরো ব্লকটি একসাথে কপি করে পেস্ট করুন
 cat << 'EOF' > vm_manager.sh
 #!/bin/bash
 set -euo pipefail
+
+# ========================================================
+# GUIDECLOUD VM MANAGER (IDX OPTIMIZED - NO SCREEN REQ)
+# ========================================================
 
 VM_DIR="$HOME/vms"
 mkdir -p "$VM_DIR"
@@ -12,18 +12,18 @@ mkdir -p "$VM_DIR"
 display_header() {
     clear
     echo "=========================================================="
-    echo "    RYZEN 9 VM MANAGER - ADVANCED CONTROL (ENG)"
+    echo "    RYZEN 9 VM MANAGER - IDX VERSION"
     echo "=========================================================="
 }
 
 list_vms() {
     local vms=($(find "$VM_DIR" -name "*.conf" -exec basename {} .conf \; 2>/dev/null))
-    echo "Total VMs found: ${#vms[@]}"
-    echo "----------------------------------------------------------"
     if [ ${#vms[@]} -eq 0 ]; then
         echo "No VMs found!"
         return 1
     else
+        echo "Total VMs found: ${#vms[@]}"
+        echo "----------------------------------------------------------"
         for i in "${!vms[@]}"; do
             printf "%d) %s\n" $((i+1)) "${vms[$i]}"
         done
@@ -33,7 +33,7 @@ list_vms() {
 
 get_vm_by_index() {
     local vms=($(find "$VM_DIR" -name "*.conf" -exec basename {} .conf \; 2>/dev/null))
-    read -p "Enter VM number from the list: " idx
+    read -p "Enter VM number: " idx
     if [[ "$idx" =~ ^[0-9]+$ ]] && [ "$idx" -le "${#vms[@]}" ] && [ "$idx" -gt 0 ]; then
         SELECTED_VM="${vms[$((idx-1))]}"
         source "$VM_DIR/$SELECTED_VM.conf"
@@ -47,41 +47,33 @@ get_vm_by_index() {
 create_new_vm() {
     display_header
     echo "[CREATE NEW VM]"
-    read -p "1. VM File Name (e.g. vps1): " VM_NAME
-    read -p "2. Hostname (e.g. guidecloud): " HOSTNAME
-    read -p "3. Username (e.g. admin): " USERNAME
-    read -s -p "4. Password: " PASSWORD
+    read -p "VM Name: " VM_NAME
+    read -p "Username: " USERNAME
+    read -s -p "Password: " PASSWORD
     echo ""
-    read -p "5. RAM (MB) [e.g. 2048]: " MEMORY
-    read -p "6. CPU Cores [e.g. 2]: " CPUS
-    read -p "7. Disk Size (e.g. 20G): " DISK_SIZE
-    read -p "8. SSH Port [e.g. 3000]: " SSH_PORT
+    read -p "RAM (MB) [2048]: " MEMORY
+    read -p "CPU Cores [2]: " CPUS
+    read -p "Disk (e.g. 20G): " DISK_SIZE
+    read -p "SSH Port [3000]: " SSH_PORT
 
     IMG_FILE="$VM_DIR/$VM_NAME.img"
     SEED_FILE="$VM_DIR/$VM_NAME-seed.iso"
 
     if [[ ! -f "$IMG_FILE" ]]; then
-        echo "Downloading OS Image... Please wait."
+        echo "Downloading OS Image..."
         wget -q --show-progress https://cloud-images.ubuntu.com/jammy/current/jammy-server-cloudimg-amd64.img -O "$IMG_FILE"
         qemu-img resize "$IMG_FILE" "$DISK_SIZE"
     fi
 
     cat > user-data <<EOC
 #cloud-config
-hostname: $HOSTNAME
-manage_etc_hosts: true
+hostname: $VM_NAME
 users:
   - name: $USERNAME
     sudo: ALL=(ALL) NOPASSWD:ALL
-    groups: users, admin
     shell: /bin/bash
     lock_passwd: false
     passwd: $(openssl passwd -6 "$PASSWORD")
-chpasswd:
-  list: |
-    root:$PASSWORD
-    $USERNAME:$PASSWORD
-  expire: false
 EOC
     echo "instance-id: iid-$VM_NAME" > meta-data
     cloud-localds "$SEED_FILE" user-data meta-data
@@ -89,17 +81,14 @@ EOC
 
     cat > "$VM_DIR/$VM_NAME.conf" <<EOC
 VM_NAME="$VM_NAME"
-HOSTNAME="$HOSTNAME"
 MEMORY="$MEMORY"
 CPUS="$CPUS"
-DISK_SIZE="$DISK_SIZE"
 SSH_PORT="$SSH_PORT"
 USERNAME="$USERNAME"
-PASSWORD="$PASSWORD"
 IMG_FILE="$IMG_FILE"
 SEED_FILE="$SEED_FILE"
 EOC
-    echo "Success: VM '$VM_NAME' Created!"
+    echo "Success!"
     sleep 2
 }
 
@@ -107,42 +96,34 @@ start_vm() {
     display_header
     if list_vms; then
         if get_vm_by_index; then
-            if ss -tln | grep -q ":$SSH_PORT "; then
-                echo "ERROR: Port $SSH_PORT is already in use."
-                read -p "Press Enter to continue..."
-                return
-            fi
-
-            echo "Starting $VM_NAME in Ryzen 9 Passthrough Mode..."
-            screen -dmS "$VM_NAME" qemu-system-x86_64 \
+            echo "Starting $VM_NAME (Ryzen Mode)..."
+            echo "Connecting... Press Ctrl+C to stop the VM."
+            
+            # সরাসরি রান হবে (Screen ছাড়া)
+            qemu-system-x86_64 \
                 -m "$MEMORY" \
-                -smp "$CPUS",sockets=1,cores="$CPUS",threads=1 \
+                -smp "$CPUS" \
                 -cpu host,hv_relaxed,hv_spinlocks=0x1fff,hv_vapic,hv_time \
                 -drive file="$IMG_FILE",format=qcow2 \
                 -drive file="$SEED_FILE",format=raw \
                 -net nic,model=virtio \
                 -net user,hostfwd=tcp::"$SSH_PORT"-:22 \
                 -nographic
-
-            echo "VM $VM_NAME is running in background!"
-            echo "SSH Command: ssh $USERNAME@localhost -p $SSH_PORT"
-            read -p "Press Enter to return..."
         fi
     fi
 }
 
 while true; do
     display_header
-    echo "1) Create New VM"
-    echo "2) Show VM List"
-    echo "3) Start VM (Ryzen 9 Mode)"
-    echo "4) Exit"
+    echo "1) Create VM"
+    echo "2) Start VM"
+    echo "3) Exit"
     read -p "Select: " opt
     case $opt in
         1) create_new_vm ;;
-        2) display_header; list_vms; read -p "Press Enter..." ;;
-        3) start_vm ;;
-        4) exit 0 ;;
+        2) start_vm ;;
+        3) exit 0 ;;
     esac
 done
 EOF
+chmod +x vm_manager.sh
