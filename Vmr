@@ -3,7 +3,7 @@ cat << 'EOF' > vm_manager.sh
 set -euo pipefail
 
 # ========================================================
-# GUIDECLOUD PRO VM MANAGER (RYZEN 9 - AUTO FIX VERSION)
+# GUIDECLOUD PRO VM MANAGER - PERSISTENT VERSION (ENG)
 # ========================================================
 
 VM_DIR="$HOME/vms"
@@ -12,17 +12,19 @@ mkdir -p "$VM_DIR"
 display_header() {
     clear
     echo "=========================================================="
-    echo "    RYZEN 9 VM MANAGER - ADVANCED CONTROL (ENG)"
+    echo "    RYZEN 9 VM MANAGER - RELOADED (ENGLISH)"
     echo "=========================================================="
 }
 
+# 1. List VMs and handle persistent data
 list_vms() {
     local vms=($(find "$VM_DIR" -name "*.conf" -exec basename {} .conf \; 2>/dev/null))
-    echo "Total VMs found: ${#vms[@]}"
     if [ ${#vms[@]} -eq 0 ]; then
-        echo "No VMs found!"
+        echo "Total VMs found: 0"
+        echo "No VMs found! Please create a new one."
         return 1
     fi
+    echo "Total VMs found: ${#vms[@]}"
     echo "--------------------------------"
     for i in "${!vms[@]}"; do
         echo "$((i+1))) ${vms[$i]}"
@@ -33,9 +35,10 @@ list_vms() {
 
 get_vm_by_index() {
     local vms=($(find "$VM_DIR" -name "*.conf" -exec basename {} .conf \; 2>/dev/null))
-    read -p "Enter VM number from the list: " idx
+    read -p "Enter VM number from list: " idx
     if [[ "$idx" =~ ^[0-9]+$ ]] && [ "$idx" -le "${#vms[@]}" ] && [ "$idx" -gt 0 ]; then
         SELECTED_VM="${vms[$((idx-1))]}"
+        # Load the configuration file
         source "$VM_DIR/$SELECTED_VM.conf"
         return 0
     else
@@ -47,16 +50,14 @@ get_vm_by_index() {
 create_new_vm() {
     display_header
     echo "[CREATE NEW VM]"
-    read -p "1. VM File Name (e.g. vps1): " VM_NAME
-    read -p "2. Hostname (e.g. guidecloud): " HOSTNAME
-    read -p "3. Username (e.g. admin): " USERNAME
+    read -p "1. VM File Name: " VM_NAME
+    read -p "2. Hostname: " HOSTNAME
+    read -p "3. Username: " USERNAME
     read -p "4. Password: " PASSWORD
-    read -p "5. RAM (MB) [e.g. 2048]: " MEMORY
-    read -p "6. CPU Cores [e.g. 2]: " CPUS
-    read -p "7. Disk Size (IMPORTANT: include G, e.g. 20G): " DISK_SIZE
-    
-    # Auto port selection logic
-    read -p "8. SSH Port [e.g. 3000]: " SSH_PORT
+    read -p "5. RAM (MB): " MEMORY
+    read -p "6. CPU Cores: " CPUS
+    read -p "7. Disk Size (e.g. 20G): " DISK_SIZE
+    read -p "8. SSH Port: " SSH_PORT
 
     IMG_FILE="$VM_DIR/$VM_NAME.img"
     SEED_FILE="$VM_DIR/$VM_NAME-seed.iso"
@@ -66,13 +67,13 @@ create_new_vm() {
         wget -q --show-progress https://cloud-images.ubuntu.com/jammy/current/jammy-server-cloudimg-amd64.img -O "$IMG_FILE"
     fi
 
-    echo "Configuring Disk Size..."
-    # Fixing the 'size' parameter error
+    # Fix disk size formatting automatically
     if [[ ! "$DISK_SIZE" =~ [GgMm]$ ]]; then
         DISK_SIZE="${DISK_SIZE}G"
     fi
     qemu-img resize "$IMG_FILE" "$DISK_SIZE"
 
+    # Create cloud-init
     cat > user-data <<EOC
 #cloud-config
 hostname: $HOSTNAME
@@ -93,6 +94,7 @@ EOC
     cloud-localds "$SEED_FILE" user-data meta-data
     rm user-data meta-data
 
+    # Save Config with ABSOLUTE PATHS to prevent start issues
     cat > "$VM_DIR/$VM_NAME.conf" <<EOC
 VM_NAME="$VM_NAME"
 HOSTNAME="$HOSTNAME"
@@ -102,8 +104,8 @@ DISK_SIZE="$DISK_SIZE"
 SSH_PORT="$SSH_PORT"
 USERNAME="$USERNAME"
 PASSWORD="$PASSWORD"
-IMG_FILE="$IMG_FILE"
-SEED_FILE="$SEED_FILE"
+IMG_FILE="$VM_DIR/$VM_NAME.img"
+SEED_FILE="$VM_DIR/$VM_NAME-seed.iso"
 EOC
     echo "Success: VM '$VM_NAME' Created!"
     sleep 2
@@ -113,11 +115,10 @@ start_vm() {
     display_header
     if list_vms; then
         if get_vm_by_index; then
-            # Checking if the port is busy before starting
+            # Port check before starting
             if ss -tln | grep -q ":$SSH_PORT "; then
-                echo "ERROR: Port $SSH_PORT is already in use by another process."
-                echo "Please use Option 4 (Edit) to change the SSH Port."
-                read -p "Press Enter to continue..."
+                echo "ERROR: Port $SSH_PORT is busy! Use Option 4 to change port."
+                read -p "Press Enter..."
                 return
             fi
 
@@ -136,39 +137,6 @@ start_vm() {
     fi
 }
 
-edit_vm() {
-    display_header
-    if list_vms; then
-        if get_vm_by_index; then
-            echo "Editing $VM_NAME (Leave blank to keep current value)"
-            read -p "New Hostname [$HOSTNAME]: " n_host
-            read -p "New RAM [$MEMORY]: " n_mem
-            read -p "New CPU [$CPUS]: " n_cpu
-            read -p "New SSH Port [$SSH_PORT]: " n_port
-            
-            HOSTNAME=${n_host:-$HOSTNAME}
-            MEMORY=${n_mem:-$MEMORY}
-            CPUS=${n_cpu:-$CPUS}
-            SSH_PORT=${n_port:-$SSH_PORT}
-            
-            cat > "$VM_DIR/$VM_NAME.conf" <<EOC
-VM_NAME="$VM_NAME"
-HOSTNAME="$HOSTNAME"
-MEMORY="$MEMORY"
-CPUS="$CPUS"
-DISK_SIZE="$DISK_SIZE"
-SSH_PORT="$SSH_PORT"
-USERNAME="$USERNAME"
-PASSWORD="$PASSWORD"
-IMG_FILE="$IMG_FILE"
-SEED_FILE="$SEED_FILE"
-EOC
-            echo "Update Successful!"
-            sleep 2
-        fi
-    fi
-}
-
 while true; do
     display_header
     echo "1) Create New VM"
@@ -181,10 +149,27 @@ while true; do
     read -p "Select Option: " opt
     case $opt in
         1) create_new_vm ;;
-        2) display_header; list_vms; read -p "Press Enter to return..." ;;
+        2) display_header; if list_vms; then if get_vm_by_index; then 
+           echo "--- Info ---"; echo "Host: $HOSTNAME"; echo "User: $USERNAME"; echo "Pass: $PASSWORD"; echo "Port: $SSH_PORT"; 
+           read -p "Enter to return..."; fi; fi ;;
         3) start_vm ;;
-        4) edit_vm ;;
-        5) display_header; if list_vms; then if get_vm_by_index; then rm -f "$IMG_FILE" "$SEED_FILE" "$VM_DIR/$SELECTED_VM.conf"; echo "VM Deleted!"; sleep 2; fi; fi ;;
+        4) display_header; if list_vms; then if get_vm_by_index; then 
+           read -p "New Port [$SSH_PORT]: " n_port; SSH_PORT=${n_port:-$SSH_PORT}; 
+           # Update config
+           cat > "$VM_DIR/$VM_NAME.conf" <<EOC
+VM_NAME="$VM_NAME"
+HOSTNAME="$HOSTNAME"
+MEMORY="$MEMORY"
+CPUS="$CPUS"
+DISK_SIZE="$DISK_SIZE"
+SSH_PORT="$SSH_PORT"
+USERNAME="$USERNAME"
+PASSWORD="$PASSWORD"
+IMG_FILE="$IMG_FILE"
+SEED_FILE="$SEED_FILE"
+EOC
+           echo "Updated!"; sleep 1; fi; fi ;;
+        5) display_header; if list_vms; then if get_vm_by_index; then rm -f "$IMG_FILE" "$SEED_FILE" "$VM_DIR/$SELECTED_VM.conf"; echo "Deleted!"; sleep 2; fi; fi ;;
         6) exit 0 ;;
     esac
 done
@@ -192,21 +177,3 @@ EOF
 
 chmod +x vm_manager.sh
 ./vm_manager.sh
-        fi
-    fi
-}
-
-while true; do
-    display_header
-    echo "1) Create VM"
-    echo "2) Start VM"
-    echo "3) Exit"
-    read -p "Select: " opt
-    case $opt in
-        1) create_new_vm ;;
-        2) start_vm ;;
-        3) exit 0 ;;
-    esac
-done
-EOF
-chmod +x vm_manager.sh
